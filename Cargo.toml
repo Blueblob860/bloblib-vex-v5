@@ -1,0 +1,17 @@
+[package]
+name = "bloblib"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.v5]
+upload-strategy = "differential"
+slot = 1
+icon = "cool-x"
+compress = true
+
+[dependencies.vexide]
+version = "0.8.0"
+features = [ "full", "vex-sdk-mock", "vex-sdk-jumptable" ]
+
+[profile.release]
+debug = true
