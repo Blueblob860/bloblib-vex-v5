@@ -72,8 +72,8 @@ impl<T: Encoder<Error = PortError>> Encoder for Vec<T> {
         let mut total_val = Angle::ZERO;
         let mut last_err = None;
 
-        for encoder in 0..self.len() {
-            let val = self[encoder].position();
+        for encoder in self {
+            let val = encoder.position();
             match val {
                 Ok(v) => {
                     total_val += v;
@@ -133,7 +133,7 @@ impl TrackingWheel {
     }
 
     pub(crate) fn get_distance_traveled(&self) -> Result<f64, PortError> {
-        Ok(self.encoder.position()?.as_radians() * self.diameter * f64::consts::PI / self.gear_ratio)
+        Ok(self.encoder.position()?.as_radians() * self.diameter / self.gear_ratio)
     }
 
     pub(crate) fn get_offset(&self) -> f64 {

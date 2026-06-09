@@ -1,9 +1,9 @@
 use core::f64;
-use std::{ops::{Add, Div, Mul, Sub}, sync::Arc, time::{Duration, Instant}};
+use std::{ops::{Add, Div, Mul, Sub}, rc::Rc, time::{Duration, Instant}};
 
 use vexide::{math::Angle, sync::RwLock, task::Task, time::sleep};
 
-use crate::{chassis::{Chassis, Drivetrain, Sensors}, math::ema, tracking_wheel::Encoder};
+use crate::{chassis::{Drivetrain, Sensors}, math::ema, tracking_wheel::Encoder};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub(crate) struct Pose {
@@ -108,8 +108,8 @@ impl Pose {
 }
 
 pub(crate) struct OdomLoop {
-    pub(crate) drivetrain: Arc<RwLock<Drivetrain>>,
-    pub(crate) sensors: Arc<RwLock<Sensors>>,
+    pub(crate) drivetrain: Rc<RwLock<Drivetrain>>,
+    pub(crate) sensors: Rc<RwLock<Sensors>>,
     pub(crate) pose: Pose,
     pub(crate) local_pose: Pose,
     pub(crate) speed: Pose,
@@ -122,10 +122,11 @@ pub(crate) struct OdomLoop {
     prev_horizontal2: f64,
     prev_imu: f64,
     prev_update: Instant,
+    running: bool,
 }
 
 impl OdomLoop {
-    pub(crate) fn new(drivetrain: Arc<RwLock<Drivetrain>>, sensors: Arc<RwLock<Sensors>>) -> Self {
+    pub(crate) fn new(drivetrain: Rc<RwLock<Drivetrain>>, sensors: Rc<RwLock<Sensors>>) -> Self {
         Self {
             drivetrain,
             sensors,
@@ -141,6 +142,7 @@ impl OdomLoop {
             prev_horizontal2: 0.0,
             prev_imu: 0.0,
             prev_update: Instant::now(),
+            running: false,
         }
     }
 
@@ -252,7 +254,7 @@ impl OdomLoop {
             heading -= (delta_v1 - delta_v2) / (sensors.vertical_1.as_ref().unwrap().get_offset() - sensors.vertical_2.as_ref().unwrap().get_offset());
         }
         // Now try the IMU
-        else if sensors.imu.is_some() {
+        else if sensors.imu_calibrated {
             heading += delta_imu;
         }
         // Fall back to the drive if there aren't any options left
@@ -264,6 +266,7 @@ impl OdomLoop {
         let avg_local_heading = self.local_pose.theta + delta_heading / 2.0;
 
         // Calculate change in X and Y
+        #[allow(unused_assignments)]
         let (mut delta_h, mut delta_v) = (0.0, 0.0);
         let (mut h_offset, mut v_offset) = (0.0, 0.0);
         if sensors.horizontal_1.is_some() {
@@ -282,7 +285,9 @@ impl OdomLoop {
                 delta_v = (delta_v + delta_v2) / 2.0;
             }
         } else {
-            delta_v = (delta_ld + delta_rd) / 2.0;
+            let drive = self.drivetrain.read().await;
+            delta_v = (delta_ld + delta_rd) / 2.0 * drive.wheel_size / drive.drive_gear_ratio;
+            drop(drive);
         }
 
         // Calculate Local X and Y deltas
@@ -319,7 +324,9 @@ impl OdomLoop {
         self.local_speed.theta = ema(delta_heading / dt, self.local_speed.theta, 0.95);
     }
 
-    pub(crate) fn odom_loop(odom_task: Arc<RwLock<OdomLoop>>) -> Task<()> {
+    pub(crate) async fn odom_loop(odom_task: Rc<RwLock<OdomLoop>>) -> Task<()> {
+        if odom_task.read().await.running { return vexide::prelude::spawn( async move {} ); }
+        odom_task.write().await.running = true;
         vexide::prelude::spawn(async move {
             odom_task.write().await.update().await;
             sleep(Duration::from_millis(10)).await;

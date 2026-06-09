@@ -9,6 +9,27 @@ pub(crate) struct Pid {
     prev_err: f64, integral: f64, prev_pid_update: Instant, prev_slew_update: Instant,
 }
 
+impl Default for Pid {
+    fn default() -> Self {
+        Self {
+            kp: 4.0,
+            ki: 0.0,
+            kd: 20.0,
+            windup_range: 4.0,
+            sign_flip_reset: true,
+            small_error: 1.0,
+            small_error_timeout: 1000.0,
+            large_error: 5.0,
+            large_error_timeout: 4000.0,
+            slew: 12.0,
+            prev_err: 0.0,
+            integral: 0.0,
+            prev_pid_update: Instant::now(),
+            prev_slew_update: Instant::now(),
+        }
+    }
+}
+
 impl Pid {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(kp: f64, ki: f64, kd: f64, windup_range: f64, sign_flip_reset: bool,

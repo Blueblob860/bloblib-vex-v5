@@ -1,15 +1,13 @@
 use crate::chassis::{Chassis, ControllerCurve};
 
-static DEFAULT_DRIVE_CURVE: ControllerCurve = ControllerCurve::new(0.0, 0.0, 1.0);
-
 impl Chassis {
     pub(crate) async fn tank(&mut self, left: f64, right: f64, disable_drive_curve: bool) {
         if disable_drive_curve {
             self.drivetrain.write().await.left_motors.iter_mut().for_each(|m| { m.set_voltage(m.max_voltage() * left).ok(); });
             self.drivetrain.write().await.right_motors.iter_mut().for_each(|m| { m.set_voltage(m.max_voltage() * right).ok(); });
         } else {
-            self.drivetrain.write().await.left_motors.iter_mut().for_each(|m| { m.set_voltage(self.throttle.curve(m.max_voltage()) * left).ok(); });
-            self.drivetrain.write().await.right_motors.iter_mut().for_each(|m| { m.set_voltage(self.throttle.curve(m.max_voltage()) * right).ok(); });
+            self.drivetrain.write().await.left_motors.iter_mut().for_each(|m| { m.set_voltage(self.throttle.curve(m.max_voltage() * left)).ok(); });
+            self.drivetrain.write().await.right_motors.iter_mut().for_each(|m| { m.set_voltage(self.throttle.curve(m.max_voltage() * right)).ok(); });
         }
     }
 
