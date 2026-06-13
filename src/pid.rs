@@ -2,8 +2,10 @@ use std::time::Instant;
 
 pub(crate) struct Pid {
     pub kp: f64, pub ki: f64, pub kd: f64, pub windup_range: f64, pub sign_flip_reset: bool,
-    pub small_error: f64, pub small_error_timeout: f64,
-    pub large_error: f64, pub large_error_timeout: f64,
+    //pub small_error: f64, pub small_error_timeout: f64,
+    pub small_exit: ExitCondition,
+    //pub large_error: f64, pub large_error_timeout: f64,
+    pub large_exit: ExitCondition,
     pub slew: f64,
 
     prev_err: f64, integral: f64, prev_pid_update: Instant, prev_slew_update: Instant,
@@ -17,10 +19,8 @@ impl Default for Pid {
             kd: 20.0,
             windup_range: 4.0,
             sign_flip_reset: true,
-            small_error: 1.0,
-            small_error_timeout: 1000.0,
-            large_error: 5.0,
-            large_error_timeout: 4000.0,
+            small_exit: ExitCondition::new(1.0, 1000.0),
+            large_exit: ExitCondition::new(5.0, 4000.0),
             slew: 12.0,
             prev_err: 0.0,
             integral: 0.0,
@@ -42,10 +42,8 @@ impl Pid {
             kd,
             windup_range,
             sign_flip_reset,
-            small_error,
-            small_error_timeout,
-            large_error,
-            large_error_timeout,
+            small_exit: ExitCondition::new(small_error, small_error_timeout),
+            large_exit: ExitCondition::new(large_error, large_error_timeout),
             slew,
             prev_err: 0.0,
             integral: 0.0,
@@ -95,7 +93,7 @@ pub(crate) struct ExitCondition {
 }
 
 impl ExitCondition {
-    pub(crate) fn new(range: f64, time: f64) -> Self {
+    pub(crate) const fn new(range: f64, time: f64) -> Self {
         Self {
             range, time,
             start: None,

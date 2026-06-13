@@ -1,10 +1,12 @@
 use core::f64;
 
-use vexide::{math::Angle, prelude::{AdiEncoder, Motor, RotationSensor}, smart::PortError};
+use vexide::{math::Angle, prelude::{AdiEncoder, Motor, RotationSensor}, smart::{PortError, motor::Gearset}};
 
 pub(crate) enum EncoderType {
     AdiEncoder,
-    Motor,
+    BlueMotor,
+    GreenMotor,
+    RedMotor,
     RotationSensor,
 }
 
@@ -40,7 +42,15 @@ impl Encoder for Motor {
     }
 
     fn encoder_type(&self) -> EncoderType {
-        EncoderType::Motor
+        if let Ok(gear) = self.gearset() {
+            match gear {
+                Gearset::Red   => EncoderType::RedMotor,
+                Gearset::Green => EncoderType::GreenMotor,
+                Gearset::Blue  => EncoderType::BlueMotor,
+            }
+        } else {
+            EncoderType::GreenMotor
+        }
     }
 
     fn reset(&mut self) -> Result<(), Self::Error> {
@@ -69,6 +79,7 @@ impl<T: Encoder<Error = PortError>> Encoder for Vec<T> {
 
     fn position(&self) -> Result<Angle, Self::Error> {
         let mut n_encoders: usize = 0;
+        let mut scale: usize = 6;
         let mut total_val = Angle::ZERO;
         let mut last_err = None;
 
@@ -77,7 +88,13 @@ impl<T: Encoder<Error = PortError>> Encoder for Vec<T> {
             match val {
                 Ok(v) => {
                     total_val += v;
-                    n_encoders += 1;
+                    let enc_scale: usize = match encoder.encoder_type() {
+                        EncoderType::RedMotor => 6,
+                        EncoderType::GreenMotor => 3,
+                        _ => 1
+                    };
+                    scale = scale.min(enc_scale);
+                    n_encoders += enc_scale;
                 }
                 Err(e) => {
                     last_err = Some(e);
@@ -89,12 +106,12 @@ impl<T: Encoder<Error = PortError>> Encoder for Vec<T> {
             return Err(err);
         }
 
-        total_val /= n_encoders as f64;
+        total_val = total_val * scale as f64 / n_encoders as f64;
         Ok(total_val)
     }
 
     fn encoder_type(&self) -> EncoderType {
-        if self.is_empty() { EncoderType::Motor } else { self.first().unwrap().encoder_type() }
+        if self.is_empty() { EncoderType::GreenMotor } else { self.first().unwrap().encoder_type() }
     }
 
     fn reset(&mut self) -> Result<(), Self::Error> {

@@ -9,6 +9,9 @@ slot = 1
 icon = "cool-x"
 compress = true
 
+[dependencies]
+async-trait = "0.1.89"
+
 [dependencies.vexide]
 version = "0.8.0"
 features = [ "full", "vex-sdk-mock", "vex-sdk-jumptable" ]

@@ -107,7 +107,7 @@ pub(crate) struct Chassis {
     pub(crate) odom: Rc<RwLock<OdomLoop>>,
     pub(crate) controller: Rc<RwLock<Controller>>,
     pub(crate) dist_travelled: Rc<RwLock<f64>>,
-    pub(crate) motion_mutex: Rc<Mutex<MotionFlag>>,
+    pub(crate) motion_mutex: Rc<Mutex<Vec<MotionFlag>>>,
 }
 
 impl Chassis {
@@ -124,7 +124,7 @@ impl Chassis {
             odom: odom.clone(),
             controller,
             dist_travelled: Rc::new(RwLock::new(0.0)),
-            motion_mutex: Rc::new(Mutex::new(MotionFlag::None))
+            motion_mutex: Rc::new(Mutex::new(vec![]))
         }
     }
 
@@ -229,15 +229,15 @@ impl Chassis {
     }
 
     pub(crate) async fn run_motion(&mut self, motion: Box<dyn Motion>, timeout: Duration) {
-        *self.motion_mutex.lock().await = MotionFlag::New(motion, timeout);
+        self.motion_mutex.lock().await.push(MotionFlag::New(motion, timeout));
     }
 
     pub(crate) async fn cancel_motion(&mut self) {
-        *self.motion_mutex.lock().await = MotionFlag::CancelCurrent;
+        self.motion_mutex.lock().await.push(MotionFlag::CancelCurrent);
     }
 
     pub(crate) async fn cancel_all_motions(&mut self) {
-        *self.motion_mutex.lock().await = MotionFlag::CancelAll;
+        self.motion_mutex.lock().await.push(MotionFlag::CancelAll);
     }
 
     pub(crate) async fn set_brake_mode(&mut self, mode: BrakeMode) {
