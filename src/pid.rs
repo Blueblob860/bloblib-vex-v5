@@ -68,6 +68,8 @@ impl Pid {
         self.integral = 0.0;
         self.prev_pid_update = Instant::now();
         self.prev_slew_update = Instant::now();
+        self.small_exit.reset();
+        self.large_exit.reset();
     }
 
     pub(crate) fn slew(&mut self, target: f64) -> f64 {

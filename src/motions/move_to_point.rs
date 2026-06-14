@@ -2,7 +2,6 @@ use core::f64;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use vexide::task::{Task, spawn};
 
 use crate::{chassis::Chassis, math::angle_error, motion_handler::Motion, motions::turn_to_heading::AngularDirection, odom::Pose};
 
@@ -40,7 +39,7 @@ impl Motion for MoveToPoint {
     async fn tick(&mut self, chassis: &mut Chassis) -> bool {
         let mut linear = chassis.linear.write().await;
         let mut angular = chassis.angular.write().await;
-        if self.close || (linear.small_exit.get_exit() 
+        if self.close && (linear.small_exit.get_exit() 
             && linear.large_exit.get_exit()) { return false; }
         
         // Update position + distance to target
@@ -113,8 +112,8 @@ impl Motion for MoveToPoint {
         return true;
     }
 
-    async fn cleanup(&mut self, chassis: &mut Chassis) {
-        todo!()
+    async fn cleanup(&mut self, _chassis: &mut Chassis) {
+
     }
 }
 
