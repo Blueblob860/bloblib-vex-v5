@@ -40,7 +40,7 @@ impl Motion for MoveToPose {
         let mut angular = chassis.angular.write().await;
 
         if self.linear_settled && angular.large_exit.get_exit() && angular.small_exit.get_exit()
-            || self.close { return false; }
+            || self.close { drop(linear); drop(angular); return false; }
         
         // calculate distance to the target point
         let pose = chassis.get_global_pose(true, true).await;
@@ -64,7 +64,7 @@ impl Motion for MoveToPose {
                                 (carrot.x - self.target.x) * self.target.theta.cos() + self.params.early_exit_range;
         let same_side = robot_side == carrot_side;
         // exit if close
-        if !same_side && self.prev_same_side && self.close && self.params.min_speed != 0.0 { return false; }
+        if !same_side && self.prev_same_side && self.close && self.params.min_speed != 0.0 { drop(linear); drop(angular); return false; }
         self.prev_same_side = same_side;
 
         // calculate error

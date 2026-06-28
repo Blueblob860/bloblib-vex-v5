@@ -214,9 +214,21 @@ impl Chassis {
         pose
     }
 
-    pub(crate) async fn wait_until(&self, distance: f64) {
+    pub(crate) async fn wait_until_distance(&self, distance: f64) {
         loop {
             if *self.dist_travelled.read().await > distance { return; }
+            vexide::prelude::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    pub(crate) async fn wait_until_angle(&self, angle: f64, local: bool) {
+        loop {
+            if (
+                if local { self.odom.read().await.get_local_pose(true).theta }
+                else { self.odom.read().await.get_pose(true).theta } - angle
+                ).abs() < 0.2 {
+                return;
+            }
             vexide::prelude::sleep(Duration::from_millis(5)).await;
         }
     }

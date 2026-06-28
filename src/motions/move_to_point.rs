@@ -40,7 +40,7 @@ impl Motion for MoveToPoint {
         let mut linear = chassis.linear.write().await;
         let mut angular = chassis.angular.write().await;
         if self.close && (linear.small_exit.get_exit() 
-            && linear.large_exit.get_exit()) { return false; }
+            && linear.large_exit.get_exit()) { drop(linear); drop(angular); return false; }
         
         // Update position + distance to target
         let pose = chassis.get_global_pose(true, true).await;
@@ -56,7 +56,7 @@ impl Motion for MoveToPoint {
         if self.prev_side.is_none() { self.prev_side = Some(side); }
         let same_side = side == self.prev_side.unwrap_or_default();
         // exit if close
-        if !same_side && self.params.min_speed != 0.0 { return false; }
+        if !same_side && self.params.min_speed != 0.0 { drop(linear); drop(angular); return false; }
         self.prev_side = Some(side);
 
         // calculate error
