@@ -25,9 +25,7 @@ pub(crate) struct SwingToHeading {
     pub theta: f64,
     pub locked_side: DriveSide,
     pub params: SwingToHeadingParams,
-    target: f64, delta: f64,
-    motor_power: f64, prev_power: f64,
-    start: f64, settling: bool,
+    prev_power: f64, settling: bool,
     prev_raw_delta: Option<f64>, prev_delta: Option<f64>,
     brake_mode: BrakeMode = BrakeMode::Brake
 }
@@ -58,7 +56,7 @@ impl Motion for SwingToHeading {
         let mut pose = chassis.get_global_pose(false, false).await;
         pose.theta = pose.theta.rem_euclid(360.0);
         
-        let raw_delta = angle_error(self.target, pose.theta, false, Auto);
+        let raw_delta = angle_error(self.theta, pose.theta, false, Auto);
         if raw_delta.signum() != self.prev_raw_delta.unwrap_or(raw_delta).signum() { self.settling = true };
         self.prev_raw_delta = Some(raw_delta);
 
