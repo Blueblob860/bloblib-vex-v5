@@ -69,7 +69,7 @@ impl TurnToHeading {
 impl Chassis {
     pub async fn turn_to_heading(&mut self, theta: f64, timeout: f64, params: TurnToHeadingParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose && params.local).await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();
@@ -98,7 +98,7 @@ impl Chassis {
 
     pub async fn swing_to_heading(&mut self, theta: f64, locked_side: DriveSide, timeout: f64, params: TurnToHeadingParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose && params.local).await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();

@@ -15,7 +15,7 @@ pub struct MoveToPointParams {
 impl Chassis {
     pub async fn move_to_point(&mut self, x: f64, y: f64, timeout: f64, mut params: MoveToPointParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose && params.local).await;
         if motion_start.is_none() { return; }
 
         self.linear.write().await.reset();
