@@ -3,7 +3,7 @@ use vexide::smart::motor::{BrakeMode, MotorControl};
 use crate::{chassis::Chassis, math::angle_error, motions::turn_to_heading::AngularDirection::Auto, odom::Pose};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(crate) enum AngularDirection {
+pub enum AngularDirection {
     #[default]
     Auto,
     Clockwise,
@@ -11,17 +11,18 @@ pub(crate) enum AngularDirection {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum DriveSide {
+pub enum DriveSide {
     Left,
     Right
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct TurnToHeadingParams {
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TurnToHeadingParams {
     pub direction: AngularDirection = AngularDirection::Auto,
     pub max_speed: f64 = 1.0,
     pub min_speed: f64 = 1.0,
-    pub early_exit_range: f64 = 1.0
+    pub early_exit_range: f64 = 1.0,
+    pub local: bool = false
 }
 
 #[derive(Default, Debug)]
@@ -65,17 +66,17 @@ impl TurnToHeading {
 }
 
 impl Chassis {
-    pub(crate) async fn turn_to_heading(&mut self, theta: f64, timeout: f64, params: TurnToHeadingParams) {
+    pub async fn turn_to_heading(&mut self, theta: f64, timeout: f64, params: TurnToHeadingParams) {
         let mut self_clone = self.clone();
         let motion_start = self_clone.start_motion().await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();
-        let mut pose = self.get_global_pose(false, false).await;
+        let mut pose = self.get_pose(params.local, false, false).await;
         let mut turn_state = TurnToHeading { params, ..Default::default() };
 
         loop {
-            pose = self.update_distance(pose, false).await;
+            pose = self.update_distance(pose, params.local).await;
 
             let mut angular = self.angular.write().await;
             let angular_settled = angular.small_exit.get_exit() && angular.large_exit.get_exit();
@@ -94,7 +95,7 @@ impl Chassis {
         self.end_motion(motion_start).await;
     }
 
-    pub(crate) async fn swing_to_heading(&mut self, theta: f64, locked_side: DriveSide, timeout: f64, params: TurnToHeadingParams) {
+    pub async fn swing_to_heading(&mut self, theta: f64, locked_side: DriveSide, timeout: f64, params: TurnToHeadingParams) {
         let mut self_clone = self.clone();
         let motion_start = self_clone.start_motion().await;
         if motion_start.is_none() { return; }
@@ -112,11 +113,11 @@ impl Chassis {
             else { dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); } ); };
         drop(dt);
         
-        let mut pose = self.get_global_pose(false, false).await;
+        let mut pose = self.get_pose(params.local, false, false).await;
         let mut turn_state = TurnToHeading { params, ..Default::default() };
 
         loop {
-            pose = self.update_distance(pose, false).await;
+            pose = self.update_distance(pose, params.local).await;
 
             let mut angular = self.angular.write().await;
             let angular_settled = angular.small_exit.get_exit() && angular.large_exit.get_exit();

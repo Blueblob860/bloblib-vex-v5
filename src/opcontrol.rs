@@ -1,7 +1,7 @@
-use crate::chassis::{Chassis, ControllerCurve};
+use crate::chassis::Chassis;
 
 impl Chassis {
-    pub(crate) async fn tank(&mut self, left: f64, right: f64, disable_drive_curve: bool) {
+    pub async fn tank(&mut self, left: f64, right: f64, disable_drive_curve: bool) {
         if disable_drive_curve {
             self.drivetrain.write().await.left_motors.iter_mut().for_each(|m| { m.set_voltage(m.max_voltage() * left).ok(); });
             self.drivetrain.write().await.right_motors.iter_mut().for_each(|m| { m.set_voltage(m.max_voltage() * right).ok(); });
@@ -11,7 +11,7 @@ impl Chassis {
         }
     }
 
-    pub(crate) async fn arcade(&mut self, throttle: f64, turn: f64, disable_drive_curve: bool, desaturation_bias: f64) {
+    pub async fn arcade(&mut self, throttle: f64, turn: f64, disable_drive_curve: bool, desaturation_bias: f64) {
         let mut throttle = if disable_drive_curve { throttle } else { self.throttle.curve(throttle) };
         let mut turn = if disable_drive_curve { turn } else { self.throttle.curve(turn) };
 
@@ -27,7 +27,7 @@ impl Chassis {
         self.tank(left_power, right_power, true).await;
     }
 
-    pub(crate) async fn curvature(&mut self, throttle: f64, turn: f64, disable_drive_curve: bool) {
+    pub async fn curvature(&mut self, throttle: f64, turn: f64, disable_drive_curve: bool) {
         if throttle == 0.0 {
             self.arcade(throttle, turn, disable_drive_curve, 0.5).await;
             return;

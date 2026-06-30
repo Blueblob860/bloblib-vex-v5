@@ -3,11 +3,12 @@ use core::f64;
 use crate::{chassis::Chassis, math::angle_error, motions::turn_to_heading::AngularDirection, odom::Pose};
 
 #[derive(Default, Debug, Clone, Copy)]
-pub(crate) struct MoveToPointParams {
+pub struct MoveToPointParams {
     pub forwards: bool = true,
     pub max_speed: f64 = 1.0,
     pub min_speed: f64 = 0.0,
-    pub early_exit_range: f64 = 0.0
+    pub early_exit_range: f64 = 0.0,
+    pub local: bool = false,
 }
 
 impl Chassis {
@@ -19,13 +20,13 @@ impl Chassis {
         self.linear.write().await.reset();
         self.angular.write().await.reset();
         let mut close = false;
-        let mut last_pose = self.get_global_pose(false, false).await;
+        let mut last_pose = self.get_pose(params.local, false, false).await;
         let mut prev_linear_out: f64 = 0.0;
         let mut prev_side: Option<bool> = None;
         let mut target = Pose::new(x, y, 0.0);
         target.theta = last_pose.angle(target);
         loop {
-            last_pose = self.update_distance(last_pose, false).await;
+            last_pose = self.update_distance(last_pose, params.local).await;
             let mut linear = self.linear.write().await;
             let mut angular = self.angular.write().await;
 

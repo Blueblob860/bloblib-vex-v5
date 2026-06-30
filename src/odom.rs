@@ -6,7 +6,7 @@ use vexide::{math::Angle, sync::RwLock, task::Task, time::sleep};
 use crate::{chassis::{Drivetrain, Sensors}, math::ema, tracking_wheel::Encoder};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
-pub(crate) struct Pose {
+pub struct Pose {
     pub x: f64,
     pub y: f64,
     pub theta: f64,
@@ -69,11 +69,11 @@ impl Div<f64> for Pose {
 }
 
 impl Pose {
-    pub(crate) fn new(x: f64, y: f64, theta: f64) -> Self {
+    pub fn new(x: f64, y: f64, theta: f64) -> Self {
         Self { x, y, theta }
     }
 
-    pub(crate) fn lerp(&self, other: Pose, t: f64) -> Pose {
+    pub fn lerp(&self, other: Pose, t: f64) -> Pose {
         Pose {
             x: t * (other.x - self.x) + self.x,
             y: t * (other.y - self.y) + self.y,
@@ -81,15 +81,15 @@ impl Pose {
         }
     }
 
-    pub(crate) fn distance(&self, other: Pose) -> f64 {
+    pub fn distance(&self, other: Pose) -> f64 {
         (other.x - self.x).hypot(other.y - self.y)
     }
 
-    pub(crate) fn angle(&self, other: Pose) -> f64 {
+    pub fn angle(&self, other: Pose) -> f64 {
         (other.y - self.y).atan2(other.x - self.x)
     }
 
-    pub(crate) fn rotate(&self, theta: f64) -> Pose {
+    pub fn rotate(&self, theta: f64) -> Pose {
         Pose {
             x: self.x * theta.cos() - self.y * theta.sin(),
             y: self.x * theta.sin() + self.y * theta.cos(),
@@ -97,7 +97,7 @@ impl Pose {
         }
     }
 
-    pub(crate) fn curvature(&self, other: Pose) -> f64 {
+    pub fn curvature(&self, other: Pose) -> f64 {
         let side = crate::math::sign(self.theta.sin() * (other.x - self.x) - self.theta.cos() * (other.y - self.y));
         let a = self.theta.tan();
         let c = a * self.x - self.y;
@@ -107,9 +107,9 @@ impl Pose {
     }
 }
 
-pub(crate) struct OdomLoop {
-    pub(crate) drivetrain: Rc<RwLock<Drivetrain>>,
-    pub(crate) sensors: Rc<RwLock<Sensors>>,
+pub struct OdomLoop {
+    pub drivetrain: Rc<RwLock<Drivetrain>>,
+    pub sensors: Rc<RwLock<Sensors>>,
     pub(crate) pose: Pose,
     pub(crate) local_pose: Pose,
     pub(crate) speed: Pose,
@@ -146,52 +146,25 @@ impl OdomLoop {
         }
     }
 
-    pub(crate) fn get_pose(&self, radians: bool) -> Pose {
-        if radians {
-            self.pose
-        } else {
-            Pose::new(self.pose.x, self.pose.y, self.pose.theta.to_degrees())
-        }
+    pub(crate) fn get_pose(&self, local: bool, radians: bool, standard_pos: bool) -> Pose {
+        let mut pose = if local { self.local_pose } else { self.pose };
+        if standard_pos { pose.theta = f64::consts::PI - pose.theta; }
+        if !radians { pose.theta = pose.theta.to_degrees(); }
+        pose
     }
 
-    pub(crate) fn set_pose(&mut self, pose: Pose, radians: bool) {
-        if radians {
-            self.pose = pose;
-        } else {
-            self.pose = Pose::new(pose.x, pose.y, pose.theta.to_radians());
-        }
+    pub(crate) fn set_pose(&mut self, pose: Pose, local: bool, radians: bool, standard_pos: bool) {
+        let mut new_pose = pose;
+        if standard_pos { new_pose.theta = -(f64::consts::PI - new_pose.theta); }
+        if !radians { new_pose.theta = new_pose.theta.to_radians(); }
+        if local { self.local_pose = new_pose; } else { self.pose = new_pose; }
     }
 
-    pub(crate) fn get_local_pose(&self, radians: bool) -> Pose {
-        if radians {
-            self.local_pose
-        } else {
-            Pose::new(self.local_pose.x, self.local_pose.y, self.local_pose.theta.to_degrees())
-        }
-    }
-
-    pub(crate) fn set_local_pose(&mut self, pose: Pose, radians: bool) {
-        if radians {
-            self.local_pose = pose;
-        } else {
-            self.local_pose = Pose::new(pose.x, pose.y, pose.theta.to_radians());
-        }
-    }
-
-    pub(crate) fn get_speed(&self, radians: bool) -> Pose {
-        if radians {
-            self.speed
-        } else {
-            Pose::new(self.speed.x, self.speed.y, self.speed.theta.to_degrees())
-        }
-    }
-
-    pub(crate) fn get_local_speed(&self, radians: bool) -> Pose {
-        if radians {
-            self.local_speed
-        } else {
-            Pose::new(self.local_speed.x, self.local_speed.y, self.local_speed.theta.to_degrees())
-        }
+    pub(crate) fn get_speed(&self, local: bool, radians: bool, standard_pos: bool) -> Pose {
+        let mut speed = if local { self.local_speed } else { self.speed };
+        if standard_pos { speed.theta = f64::consts::PI - speed.theta; }
+        if !radians { speed.theta = speed.theta.to_degrees(); }
+        speed
     }
 
     pub(crate) fn estimate_pose(&self, time: f64, radians: bool) -> Pose {
@@ -209,7 +182,7 @@ impl OdomLoop {
         else { Pose::new(future_pose.x, future_pose.y, future_pose.theta.to_degrees()) }
     }
 
-    pub(crate) async fn update(&mut self) {
+    pub async fn update(&mut self) {
         // Update all sensors
         let sensors = self.sensors.read().await;
         let ld = self.drivetrain.read().await.left_motors.position().unwrap_or(Angle::from_radians(self.prev_left_drive)).as_radians();

@@ -4,32 +4,33 @@ use vexide::smart::motor::{BrakeMode, MotorControl};
 use crate::{chassis::Chassis, motions::turn_to_heading::{AngularDirection, DriveSide, TurnToHeading, TurnToHeadingParams}};
 
 #[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct TurnToPointParams {
-    forwards: bool = false,
-    direction: AngularDirection = AngularDirection::Auto,
-    max_speed: f64 = 1.0,
-    min_speed: f64 = 1.0,
-    early_exit_range: f64 = 1.0
+pub struct TurnToPointParams {
+    pub forwards: bool = false,
+    pub direction: AngularDirection = AngularDirection::Auto,
+    pub max_speed: f64 = 1.0,
+    pub min_speed: f64 = 1.0,
+    pub early_exit_range: f64 = 1.0,
+    pub local: bool = false,
 }
 
 impl From<TurnToPointParams> for TurnToHeadingParams {
     fn from(value: TurnToPointParams) -> Self {
-        Self { direction: value.direction, max_speed: value.max_speed, min_speed: value.min_speed, early_exit_range: value.early_exit_range }
+        Self { direction: value.direction, max_speed: value.max_speed, min_speed: value.min_speed, early_exit_range: value.early_exit_range, local: value.local }
     }
 }
 
 impl Chassis {
-    pub(crate) async fn turn_to_point(&mut self, x: f64, y: f64, timeout: f64, params: TurnToPointParams) {
+    pub async fn turn_to_point(&mut self, x: f64, y: f64, timeout: f64, params: TurnToPointParams) {
         let mut self_clone = self.clone();
         let motion_start = self_clone.start_motion().await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();
-        let mut pose = self.get_global_pose(false, false).await;
+        let mut pose = self.get_pose(params.local, false, false).await;
         let mut turn_state = TurnToHeading { params: params.into(), ..Default::default() };
 
         loop {
-            pose = self.update_distance(pose, false).await;
+            pose = self.update_distance(pose, params.local).await;
 
             let mut angular = self.angular.write().await;
             let angular_settled = angular.small_exit.get_exit() && angular.large_exit.get_exit();
@@ -51,7 +52,7 @@ impl Chassis {
         self.end_motion(motion_start).await;
     }
 
-    pub(crate) async fn swing_to_point(&mut self, x: f64, y: f64, locked_side: DriveSide, timeout: f64, params: TurnToPointParams) {
+    pub async fn swing_to_point(&mut self, x: f64, y: f64, locked_side: DriveSide, timeout: f64, params: TurnToPointParams) {
         let mut self_clone = self.clone();
         let motion_start = self_clone.start_motion().await;
         if motion_start.is_none() { return; }
@@ -69,11 +70,11 @@ impl Chassis {
             else { dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); } ); };
         drop(dt);
         
-        let mut pose = self.get_global_pose(false, false).await;
+        let mut pose = self.get_pose(params.local, false, false).await;
         let mut turn_state = TurnToHeading { params: params.into() , ..Default::default() };
 
         loop {
-            pose = self.update_distance(pose, false).await;
+            pose = self.update_distance(pose, params.local).await;
 
             let mut angular = self.angular.write().await;
             let angular_settled = angular.small_exit.get_exit() && angular.large_exit.get_exit();

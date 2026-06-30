@@ -2,7 +2,7 @@ use core::f64;
 
 use vexide::{math::Angle, prelude::{AdiEncoder, Motor, RotationSensor}, smart::{PortError, motor::Gearset}};
 
-pub(crate) enum EncoderType {
+pub enum EncoderType {
     AdiEncoder,
     BlueMotor,
     GreenMotor,
@@ -10,7 +10,7 @@ pub(crate) enum EncoderType {
     RotationSensor,
 }
 
-pub(crate) trait Encoder {
+pub trait Encoder {
     type Error;
 
     fn position(&self) -> Result<Angle, Self::Error>;
@@ -131,7 +131,7 @@ impl<T: Encoder<Error = PortError>> Encoder for Vec<T> {
     }
 }
 
-pub(crate) struct TrackingWheel {
+pub struct TrackingWheel {
     encoder: Box<dyn Encoder<Error = PortError>>,
     diameter: f64,
     offset: f64,
@@ -139,25 +139,25 @@ pub(crate) struct TrackingWheel {
 }
 
 impl TrackingWheel {
-    pub(crate) fn new(encoder: Box<dyn Encoder<Error = PortError>>, diameter: f64, offset: f64, gear_ratio: f64) -> Self {
+    pub fn new(encoder: Box<dyn Encoder<Error = PortError>>, diameter: f64, offset: f64, gear_ratio: f64) -> Self {
         Self {
             encoder, diameter, offset, gear_ratio
         }
     }
 
-    pub(crate) fn reset(&mut self) -> Result<(), PortError> {
+    pub fn reset(&mut self) -> Result<(), PortError> {
         self.encoder.reset()
     }
 
-    pub(crate) fn get_distance_traveled(&self) -> Result<f64, PortError> {
+    pub fn get_distance_traveled(&self) -> Result<f64, PortError> {
         Ok(self.encoder.position()?.as_radians() * self.diameter / self.gear_ratio)
     }
 
-    pub(crate) fn get_offset(&self) -> f64 {
+    pub fn get_offset(&self) -> f64 {
         self.offset
     }
 
-    pub(crate) fn get_type(&self) -> EncoderType {
+    pub fn get_type(&self) -> EncoderType {
         self.encoder.encoder_type()
     }
 }

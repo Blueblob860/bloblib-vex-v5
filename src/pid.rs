@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-pub(crate) struct Pid {
+pub struct Pid {
     pub kp: f64, pub ki: f64, pub kd: f64, pub windup_range: f64, pub sign_flip_reset: bool,
     //pub small_error: f64, pub small_error_timeout: f64,
     pub small_exit: ExitCondition,
@@ -32,7 +32,7 @@ impl Default for Pid {
 
 impl Pid {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(kp: f64, ki: f64, kd: f64, windup_range: f64, sign_flip_reset: bool,
+    pub fn new(kp: f64, ki: f64, kd: f64, windup_range: f64, sign_flip_reset: bool,
                       small_error: f64, small_error_timeout: f64,
                       large_error: f64, large_error_timeout: f64,
                       slew: f64) -> Self {
@@ -52,18 +52,19 @@ impl Pid {
         }
     }
 
-    pub(crate) fn update(&mut self, error: f64) -> f64 {
+    pub fn update(&mut self, error: f64) -> f64 {
         let now = Instant::now();
         let dt = self.prev_pid_update.elapsed().as_secs_f64() / 1000.0;
         self.prev_pid_update = now;
         self.integral += error;
-        if error.signum() != self.prev_err.signum() && self.sign_flip_reset { self.integral = 0.0; }
+        if (error.signum() != self.prev_err.signum() && self.sign_flip_reset)
+            || error.abs() > self.windup_range && self.windup_range != 0.0 { self.integral = 0.0; }
         let derivative = (error - self.prev_err) / dt;
         self.prev_err = error;
         self.kp * error + self.ki * self.integral + self.kd * derivative
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.prev_err = 0.0;
         self.integral = 0.0;
         self.prev_pid_update = Instant::now();
@@ -72,7 +73,7 @@ impl Pid {
         self.large_exit.reset();
     }
 
-    pub(crate) fn slew(&mut self, target: f64) -> f64 {
+    pub fn slew(&mut self, target: f64) -> f64 {
         let now = Instant::now();
         let dt = self.prev_slew_update.elapsed().as_secs_f64() / 1000.0;
         self.prev_slew_update = now;
@@ -87,7 +88,7 @@ impl Pid {
     }
 }
 
-pub(crate) struct ExitCondition {
+pub struct ExitCondition {
     pub range: f64,
     pub time: f64,
     start: Option<Instant>,
@@ -95,7 +96,7 @@ pub(crate) struct ExitCondition {
 }
 
 impl ExitCondition {
-    pub(crate) const fn new(range: f64, time: f64) -> Self {
+    pub const fn new(range: f64, time: f64) -> Self {
         Self {
             range, time,
             start: None,
@@ -103,9 +104,9 @@ impl ExitCondition {
         }
     }
 
-    pub(crate) fn get_exit(&mut self) -> bool { self.done }
+    pub fn get_exit(&mut self) -> bool { self.done }
 
-    pub(crate) fn update(&mut self, input: f64) -> bool {
+    pub fn update(&mut self, input: f64) -> bool {
         let now = Instant::now();
         if input.abs() > self.range { self.start = None; }
         else if self.start.is_none() { self.start = Some(now); }
@@ -113,7 +114,7 @@ impl ExitCondition {
         self.done
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.start = None;
         self.done = false;
     }

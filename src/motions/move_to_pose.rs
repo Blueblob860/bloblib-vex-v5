@@ -3,7 +3,7 @@ use core::f64;
 use crate::{chassis::Chassis, math::angle_error, motions::turn_to_heading::AngularDirection, odom::Pose};
 
 #[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct MoveToPoseParams {
+pub struct MoveToPoseParams {
     pub forwards: bool = true,
     pub horizontal_drift: Option<f64> = None,
     pub f_lead: f64 = 0.6,
@@ -11,6 +11,7 @@ pub(crate) struct MoveToPoseParams {
     pub max_speed: f64 = 1.0,
     pub min_speed: f64 = 1.0,
     pub early_exit_range: f64 = 0.0,
+    pub local: bool = false,
 }
 
 impl Chassis {
@@ -31,10 +32,10 @@ impl Chassis {
         let mut linear_settled = false;
         let mut prev_same_side = false;
         let mut prev_linear_out: f64 = 0.0;
-        let mut pose = self.get_global_pose(false, false).await;
+        let mut last_pose = self.get_pose(params.local, false, false).await;
 
         loop {
-            pose = self.update_distance(pose, false).await;
+            last_pose = self.update_distance(last_pose, false).await;
 
             let mut linear = self.linear.write().await;
             let mut angular = self.angular.write().await;
@@ -46,7 +47,7 @@ impl Chassis {
             }
             
             // calculate distance to the target point
-            let pose = self.get_global_pose(true, true).await;
+            let pose = self.get_pose(params.local, true, true).await;
             let dist_target = pose.distance(target);
         
             // check if the robot is close enough to the target to start settling
