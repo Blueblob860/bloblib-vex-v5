@@ -3,7 +3,7 @@ use std::{rc::Rc, time::{Duration, Instant}};
 
 use vexide::{prelude::{Controller, InertialSensor, Motor}, smart::motor::BrakeMode, sync::{Mutex, MutexGuard, RwLock}, task::Task, time::sleep};
 
-use crate::{motion_handler::{Motion, MotionFlag, MotionHandler}, odom::{OdomLoop, Pose}, pid::Pid, tracking_wheel::{Encoder, TrackingWheel}};
+use crate::{odom::{OdomLoop, Pose}, pid::Pid, tracking_wheel::{Encoder, TrackingWheel}};
 
 pub(crate) struct Drivetrain {
     pub(crate) left_motors: Vec<Motor>,
@@ -27,7 +27,6 @@ pub(crate) struct Sensors {
     pub(crate) horizontal_2: Option<TrackingWheel>,
     pub(crate) imu: Option<InertialSensor>,
     pub(crate) imu_scaler: Option<f64>,
-
     pub(crate) imu_calibrated: bool,
 }
 
@@ -107,7 +106,8 @@ pub(crate) struct Chassis {
     pub(crate) odom: Rc<RwLock<OdomLoop>>,
     pub(crate) controller: Rc<RwLock<Controller>>,
     pub(crate) dist_travelled: Rc<RwLock<f64>>,
-    pub(crate) motion_mutex: Rc<Mutex<Vec<MotionFlag>>>,
+    pub(crate) motion_running: Rc<Mutex<(bool, bool)>>,
+    pub(crate) motion_start: Rc<Mutex<Instant>>,
 }
 
 impl Chassis {
@@ -124,7 +124,8 @@ impl Chassis {
             odom: odom.clone(),
             controller,
             dist_travelled: Rc::new(RwLock::new(0.0)),
-            motion_mutex: Rc::new(Mutex::new(vec![]))
+            motion_running: Rc::new(Mutex::new((false, false))),
+            motion_start: Rc::new(Mutex::new(Instant::now()))
         }
     }
 
@@ -153,7 +154,7 @@ impl Chassis {
         true
     }
 
-    pub(crate) async fn calibrate(&mut self, calibrate_imu: bool) -> (Task<()>, Task<()>) {
+    pub(crate) async fn calibrate(&mut self, calibrate_imu: bool) -> Task<()> {
         if calibrate_imu {
             for _ in 0..5 {
                 if self.calibrate_imu().await {
@@ -179,9 +180,7 @@ impl Chassis {
         drop(sensors);
 
         let odom_task = OdomLoop::odom_loop(self.odom.clone());
-        let mut motion_handler = MotionHandler::new(self.clone()).await;
-        let motion_task = vexide::prelude::spawn(async move { motion_handler.handle().await; });
-        (odom_task.await, motion_task)
+        odom_task.await
     }
 
     pub(crate) async fn set_global_pose(&mut self, pose: Pose, radians: bool) {
@@ -240,16 +239,45 @@ impl Chassis {
         }
     }
 
-    pub(crate) async fn run_motion(&mut self, motion: Box<dyn Motion>, timeout: Duration) {
-        self.motion_mutex.lock().await.push(MotionFlag::New(motion, timeout));
+    pub(crate) async fn start_motion(&mut self) -> Option<MutexGuard<'_, Instant>> {
+        let mut running = self.motion_running.lock().await;
+        if running.0 { running.1 = true; }
+        else { running.0 = true; }
+        drop(running);
+        let mut self_clone = self.clone();
+        let mut mutex = self.motion_start.lock().await;
+        if !self.motion_running.lock().await.0 { drop(mutex); return None; }
+        self_clone.set_local_pose(Pose::default(), false).await;
+        *self_clone.dist_travelled.write().await = 0.0;
+        *mutex = Instant::now();
+        Some(mutex)
+    }
+
+    pub(crate) async fn update_distance(&mut self, last_pose: Pose, local: bool) -> Pose {
+        let pose = if local {
+            self.get_local_pose(false, false).await
+        } else { self.get_global_pose(false, false).await };
+        *self.dist_travelled.write().await += pose.distance(last_pose);
+        pose
+    }
+
+    pub(crate) async fn end_motion(&mut self, mutex: Option<MutexGuard<'_, Instant>>) {
+        self.tank(0.0, 0.0, true).await;
+        *self.dist_travelled.write().await = -1.0;
+        let mut queue = self.motion_running.lock().await;
+        queue.0 = queue.1; queue.1 = false;
+        drop(mutex);
     }
 
     pub(crate) async fn cancel_motion(&mut self) {
-        self.motion_mutex.lock().await.push(MotionFlag::CancelCurrent);
+        self.motion_running.lock().await.0 = false;
     }
 
     pub(crate) async fn cancel_all_motions(&mut self) {
-        self.motion_mutex.lock().await.push(MotionFlag::CancelAll);
+        let mut lock = self.motion_running.lock().await;
+        lock.0 = false;
+        lock.1 = false;
+        drop(lock);
     }
 
     pub(crate) async fn set_brake_mode(&mut self, mode: BrakeMode) {
