@@ -74,7 +74,7 @@ impl Motion for SwingToHeading {
         angular.large_exit.update(delta); angular.small_exit.update(delta);
 
         if motor_power > self.params.max_speed { motor_power = self.params.max_speed; }
-        if motor_power < -self.params.max_speed { motor_power = -self.params.max_speed; }
+        else if motor_power < -self.params.max_speed { motor_power = -self.params.max_speed; }
         if delta.abs() > 20.0 { motor_power = angular.slew(motor_power); }
         if motor_power < 0.0 && motor_power > -self.params.min_speed { motor_power = -self.params.min_speed; }
         else if motor_power > 0.0 && motor_power < self.params.min_speed { motor_power = self.params.min_speed; }

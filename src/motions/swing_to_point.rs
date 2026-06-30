@@ -47,7 +47,7 @@ impl Motion for SwingToPoint {
         }
 
         let mut pose = chassis.get_global_pose(false, false).await;
-        pose.theta = pose.theta.rem_euclid(360.0);
+        pose.theta = if self.params.forwards { pose.theta.rem_euclid(360.0) } else { (pose.theta - 180.0).rem_euclid(360.0) };
 
         let (delta_x, delta_y) = (self.x - pose.x, self.y - pose.y);
         let target = (f64::consts::TAU - delta_y.atan2(delta_x)).to_degrees().rem_euclid(360.0);
@@ -70,7 +70,7 @@ impl Motion for SwingToPoint {
         angular.large_exit.update(delta); angular.small_exit.update(delta);
 
         if motor_power > self.params.max_speed { motor_power = self.params.max_speed; }
-        if motor_power < -self.params.max_speed { motor_power = -self.params.max_speed; }
+        else if motor_power < -self.params.max_speed { motor_power = -self.params.max_speed; }
         if delta.abs() > 20.0 { motor_power = angular.slew(motor_power); }
         if motor_power < 0.0 && motor_power > -self.params.min_speed { motor_power = -self.params.min_speed; }
         else if motor_power > 0.0 && motor_power < self.params.min_speed { motor_power = self.params.min_speed; }
