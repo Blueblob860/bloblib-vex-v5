@@ -213,15 +213,16 @@ impl Chassis {
         }
     }
 
-    pub async fn start_motion(&mut self) -> Option<MutexGuard<'_, Instant>> {
+    pub async fn start_motion(&mut self, local_reset: bool) -> Option<MutexGuard<'_, Instant>> {
         let mut running = self.motion_running.lock().await;
         if running.0 { running.1 = true; }
         else { running.0 = true; }
         drop(running);
-        let self_clone = self.clone();
+        let mut self_clone = self.clone();
         let mut mutex = self.motion_start.lock().await;
         if !self.motion_running.lock().await.0 { drop(mutex); return None; }
         *self_clone.dist_travelled.write().await = 0.0;
+        if local_reset { self_clone.set_pose(Pose::default(), true, true, false).await; }
         *mutex = Instant::now();
         Some(mutex)
     }

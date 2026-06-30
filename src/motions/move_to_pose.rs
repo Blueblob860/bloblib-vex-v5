@@ -12,12 +12,13 @@ pub struct MoveToPoseParams {
     pub min_speed: f64 = 1.0,
     pub early_exit_range: f64 = 0.0,
     pub local: bool = false,
+    pub reset_local_pose: bool = true,
 }
 
 impl Chassis {
     pub async fn move_to_pose(&mut self, x: f64, y: f64, theta: f64, timeout: f64, mut params: MoveToPoseParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion().await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
         if motion_start.is_none() { return; }
 
         self.linear.write().await.reset();

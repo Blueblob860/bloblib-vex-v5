@@ -11,18 +11,19 @@ pub struct TurnToPointParams {
     pub min_speed: f64 = 1.0,
     pub early_exit_range: f64 = 1.0,
     pub local: bool = false,
+    pub reset_local_pose: bool = true,
 }
 
 impl From<TurnToPointParams> for TurnToHeadingParams {
     fn from(value: TurnToPointParams) -> Self {
-        Self { direction: value.direction, max_speed: value.max_speed, min_speed: value.min_speed, early_exit_range: value.early_exit_range, local: value.local }
+        Self { direction: value.direction, max_speed: value.max_speed, min_speed: value.min_speed, early_exit_range: value.early_exit_range, local: value.local, reset_local_pose: value.reset_local_pose }
     }
 }
 
 impl Chassis {
     pub async fn turn_to_point(&mut self, x: f64, y: f64, timeout: f64, params: TurnToPointParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion().await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();
@@ -54,7 +55,7 @@ impl Chassis {
 
     pub async fn swing_to_point(&mut self, x: f64, y: f64, locked_side: DriveSide, timeout: f64, params: TurnToPointParams) {
         let mut self_clone = self.clone();
-        let motion_start = self_clone.start_motion().await;
+        let motion_start = self_clone.start_motion(params.reset_local_pose).await;
         if motion_start.is_none() { return; }
 
         self.angular.write().await.reset();
