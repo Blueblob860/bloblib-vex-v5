@@ -2,12 +2,14 @@ use async_trait::async_trait;
 
 use core::f64;
 use std::time::Duration;
+use vexide::smart::motor::{BrakeMode, MotorControl};
 
-use crate::{chassis::Chassis, math::angle_error, motion_handler::Motion, motions::turn_to_heading::AngularDirection::{self, Auto}};
+use crate::{chassis::Chassis, math::angle_error, motion_handler::Motion, motions::turn_to_heading::{AngularDirection::{self, Auto}, DriveSide}};
 
 #[derive(Debug, Default)]
 pub(crate) struct TurnToPointParams {
     forwards: bool = false,
+    locked_side: DriveSide,
     direction: AngularDirection = AngularDirection::Auto,
     max_speed: f64 = 1.0,
     min_speed: f64 = 1.0,
@@ -17,14 +19,25 @@ pub(crate) struct TurnToPointParams {
 #[derive(Debug, Default)]
 pub(crate) struct TurnToPoint {
     pub x: f64, pub y: f64, pub params: TurnToPointParams,
-    prev_power: f64, prev_raw_delta: Option<f64>,
-    prev_delta: Option<f64>, settling: bool
+    brake_mode: BrakeMode = BrakeMode::Coast, prev_power: f64,
+    prev_raw_delta: Option<f64>, prev_delta: Option<f64>, settling: bool
 }
 
 #[async_trait(?Send)]
 impl Motion for TurnToPoint {
     async fn setup(&mut self, chassis: &mut Chassis) {
         chassis.angular.write().await.reset();
+        if self.params.locked_side == DriveSide::None { return; }
+        let mut dt = chassis.drivetrain.write().await;
+        let target = if self.params.locked_side == DriveSide::Left { dt.left_motors[0].target() }
+            else { dt.right_motors[0].target() };
+        self.brake_mode = match target {
+            MotorControl::Brake(brake) => brake,
+            _ => BrakeMode::Coast,
+        };
+        if self.params.locked_side == DriveSide::Left { dt.left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); }); }
+            else { dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); } ); };
+        drop(dt);
     }
 
     async fn tick(&mut self, chassis: &mut Chassis) -> bool {
@@ -61,16 +74,39 @@ impl Motion for TurnToPoint {
 
         drop(angular);
         chassis.tank(motor_power, -motor_power, true).await;
+
+        if self.params.locked_side == DriveSide::None {
+            return true;
+        } else if self.params.locked_side == DriveSide::Left {
+            let mut dt = chassis.drivetrain.write().await;
+            dt.left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); });
+            drop(dt);
+        } else {
+            let mut dt = chassis.drivetrain.write().await;
+            dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); });
+            drop(dt);
+        }
+
         return true;
     }
 
-    async fn cleanup(&mut self, _chassis: &mut Chassis) {}
+    async fn cleanup(&mut self, chassis: &mut Chassis) {
+        if self.params.locked_side == DriveSide::None { return; }
+        chassis.set_brake_mode(self.brake_mode).await;
+    }
 }
 
 impl Chassis {
     pub(crate) async fn turn_to_point(&mut self, x: f64, y: f64, timeout: u64, params: TurnToPointParams) {
         self.run_motion(Box::new(TurnToPoint {
             x, y, params, ..Default::default()
+        }), Duration::from_millis(timeout)).await;
+    }
+
+    pub(crate) async fn swing_to_point(&mut self, x: f64, y: f64, locked_side: DriveSide, timeout: u64, params: TurnToPointParams) {
+        self.run_motion(Box::new(TurnToPoint {
+            x, y, params: TurnToPointParams { locked_side, ..params }, 
+            ..Default::default()
         }), Duration::from_millis(timeout)).await;
     }
 }

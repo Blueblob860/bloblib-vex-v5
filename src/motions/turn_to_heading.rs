@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use vexide::smart::motor::{BrakeMode, MotorControl};
 
 use crate::{chassis::Chassis, math::angle_error, motion_handler::Motion, motions::turn_to_heading::AngularDirection::Auto};
 
@@ -12,30 +13,51 @@ pub(crate) enum AngularDirection {
     CounterClockwise
 }
 
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) enum DriveSide {
+    #[default]
+    None,
+    Left,
+    Right
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct TurnToHeadingParams {
-    direction: AngularDirection = AngularDirection::Auto,
-    max_speed: f64 = 1.0,
-    min_speed: f64 = 1.0,
-    early_exit_range: f64 = 1.0
+    pub locked_side: DriveSide,
+    pub direction: AngularDirection = AngularDirection::Auto,
+    pub max_speed: f64 = 1.0,
+    pub min_speed: f64 = 1.0,
+    pub early_exit_range: f64 = 1.0
 }
 
 #[derive(Default, Debug)]
 pub(crate) struct TurnToHeading {
     pub theta: f64, pub params: TurnToHeadingParams,
-    prev_power: f64, prev_raw_delta: Option<f64>,
-    prev_delta: Option<f64>, settling: bool
+    brake_mode: BrakeMode = BrakeMode::Coast, prev_power: f64,
+    prev_raw_delta: Option<f64>, prev_delta: Option<f64>, settling: bool
 }
 
 #[async_trait(?Send)]
 impl Motion for TurnToHeading {
     async fn setup(&mut self, chassis: &mut Chassis) {
         chassis.angular.write().await.reset();
+        if self.params.locked_side == DriveSide::None { return; }
+        let mut dt = chassis.drivetrain.write().await;
+        let target = if self.params.locked_side == DriveSide::Left { dt.left_motors[0].target() }
+            else { dt.right_motors[0].target() };
+        self.brake_mode = match target {
+            MotorControl::Brake(brake) => brake,
+            _ => BrakeMode::Coast,
+        };
+        if self.params.locked_side == DriveSide::Left { dt.left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); }); }
+            else { dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); } ); };
+        drop(dt);
     }
 
     async fn tick(&mut self, chassis: &mut Chassis) -> bool {
         let mut angular = chassis.angular.write().await;
-        let pose = chassis.get_global_pose(false, false).await;
+        let mut pose = chassis.get_global_pose(false, false).await;
+        if self.params.locked_side != DriveSide::None { pose.theta = pose.theta.rem_euclid(360.0) };
 
         let raw_delta = angle_error(self.theta, pose.theta, false, Auto);
         if raw_delta.signum() != self.prev_raw_delta.unwrap_or(raw_delta).signum() { self.settling = true };
@@ -63,16 +85,39 @@ impl Motion for TurnToHeading {
 
         drop(angular);
         chassis.tank(motor_power, -motor_power, true).await;
+
+        if self.params.locked_side == DriveSide::None {
+            return true;
+        } else if self.params.locked_side == DriveSide::Left {
+            let mut dt = chassis.drivetrain.write().await;
+            dt.left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); });
+            drop(dt);
+        } else {
+            let mut dt = chassis.drivetrain.write().await;
+            dt.right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Hold).ok(); });
+            drop(dt);
+        }
+
         return true;
     }
 
-    async fn cleanup(&mut self, _chassis: &mut Chassis) {}
+    async fn cleanup(&mut self, chassis: &mut Chassis) {
+        if self.params.locked_side == DriveSide::None { return; }
+        chassis.set_brake_mode(self.brake_mode).await;
+    }
 }
 
 impl Chassis {
     pub(crate) async fn turn_to_heading(&mut self, theta: f64, timeout: u64, params: TurnToHeadingParams) {
         self.run_motion(Box::new(TurnToHeading {
             theta, params, ..Default::default()
+        }), Duration::from_millis(timeout)).await;
+    }
+
+    pub(crate) async fn swing_to_heading(&mut self, theta: f64, locked_side: DriveSide, timeout: u64, params: TurnToHeadingParams) {
+        self.run_motion(Box::new(TurnToHeading {
+            theta, params: TurnToHeadingParams { locked_side, ..params }, 
+            ..Default::default()
         }), Duration::from_millis(timeout)).await;
     }
 }
