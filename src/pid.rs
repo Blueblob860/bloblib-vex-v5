@@ -1,32 +1,50 @@
-use std::time::Instant;
+use std::{rc::Rc, time::Instant};
+
+use vexide::sync::RwLock;
 
 pub struct Pid {
-    pub kp: f64, pub ki: f64, pub kd: f64, pub windup_range: f64, pub sign_flip_reset: bool,
-    //pub small_error: f64, pub small_error_timeout: f64,
-    pub small_exit: ExitCondition,
-    //pub large_error: f64, pub large_error_timeout: f64,
-    pub large_exit: ExitCondition,
-    pub slew: f64,
+    pub kp: f64 = 4.0, pub ki: f64 = 0.0, pub kd: f64 = 20.0,
+    pub windup_range: f64 = 4.0, pub sign_flip_reset: bool = true,
+    pub small_exit: ExitCondition = ExitCondition::new(1.0, 1000.0),
+    pub large_exit: ExitCondition = ExitCondition::new(5.0, 4000.0),
+    pub slew: f64 = 12.0,
 
-    prev_err: f64, integral: f64, prev_pid_update: Instant, prev_slew_update: Instant,
+    prev_err: f64 = 0.0, integral: f64 = 0.0, prev_pid_update: Instant, prev_slew_update: Instant,
 }
 
 impl Default for Pid {
     fn default() -> Self {
         Self {
-            kp: 4.0,
-            ki: 0.0,
-            kd: 20.0,
-            windup_range: 4.0,
-            sign_flip_reset: true,
-            small_exit: ExitCondition::new(1.0, 1000.0),
-            large_exit: ExitCondition::new(5.0, 4000.0),
-            slew: 12.0,
-            prev_err: 0.0,
-            integral: 0.0,
             prev_pid_update: Instant::now(),
             prev_slew_update: Instant::now(),
+            ..
         }
+    }
+}
+
+pub struct PidBuilder {
+    pub kp: f64 = 4.0, pub ki: f64 = 0.0, pub kd: f64 = 20.0, pub slew: f64 = 12.0,
+    pub windup_range: f64 = 4.0, pub sign_flip_reset: bool = false,
+    pub small_error: f64 = 1.0, pub small_error_timeout: f64 = 1000.0,
+    pub large_error: f64 = 4.0, pub large_error_timeout: f64 = 4000.0,
+}
+
+impl From<PidBuilder> for Pid {
+    fn from(value: PidBuilder) -> Self {
+        Self {
+            kp: value.kp, ki: value.kp, kd: value.kd, slew: value.slew,
+            windup_range: value.windup_range, sign_flip_reset: value.sign_flip_reset,
+            small_exit: ExitCondition::new(value.small_error, value.small_error_timeout),
+            large_exit: ExitCondition::new(value.large_error, value.large_error_timeout),
+            prev_err: 0.0, integral: 0.0,
+            prev_pid_update: Instant::now(), prev_slew_update: Instant::now(),
+        }
+    }
+}
+
+impl From<PidBuilder> for Rc<RwLock<Pid>> {
+    fn from(value: PidBuilder) -> Self {
+        Rc::new(RwLock::new(value.into()))
     }
 }
 
