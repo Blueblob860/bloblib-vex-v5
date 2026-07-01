@@ -9,13 +9,13 @@ Hello there! Bloblib is an open source motion control library for the Vex V5 pla
 ## Features
 Note that this feature list is currently unfinished and also incomplete please
 
-[x] Pid Control
-[x] Odometry (Tracking wheels optional)
-[x] Turn/Swing to Face Heading
-[x] Turn/Swing to Face Point
-[x] Boomerang Move to Pose
-[ ] Path Following via Stanley
-[x] All Driver Control Functions from Lemlib
+- [x] Pid Control
+- [x] Odometry (Tracking wheels optional)
+- [x] Turn/Swing to Face Heading
+- [x] Turn/Swing to Face Point
+- [x] Boomerang Move to Pose
+- [ ] Path Following via Stanley
+- [x] All Driver Control Functions from Lemlib
 
 ## Getting Started
 First off, if you don't already have [Rust](rust-lang.org) and [vexide](vexide.dev) setup, start off with the [vexide getting started guide](vexide.dev/docs)
