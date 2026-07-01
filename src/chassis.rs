@@ -91,7 +91,6 @@ pub struct Chassis {
     pub drivetrain: Rc<RwLock<Drivetrain>>,
     pub linear: Rc<RwLock<Pid>>,
     pub angular: Rc<RwLock<Pid>>,
-    pub heading: Rc<RwLock<Pid>>,
     pub sensors: Rc<RwLock<Sensors>>,
     pub throttle: ControllerCurve,
     pub steer: ControllerCurve,
@@ -103,18 +102,19 @@ pub struct Chassis {
 }
 
 impl Chassis {
-    pub fn new(drivetrain: Rc<RwLock<Drivetrain>>, sensors: Rc<RwLock<Sensors>>, controller: Rc<RwLock<Controller>>) -> Self {
+    pub fn new(drivetrain: Drivetrain, sensors: Sensors, controller: Controller) -> Self {
+        let drivetrain = Rc::new(RwLock::new(drivetrain));
+        let sensors = Rc::new(RwLock::new(sensors));
         let odom = Rc::new(RwLock::new(OdomLoop::new(drivetrain.clone(), sensors.clone())));
         Self {
             drivetrain,
             linear: Rc::new(RwLock::new(Pid::default())),
             angular: Rc::new(RwLock::new(Pid::default())),
-            heading: Rc::new(RwLock::new(Pid::default())),
             sensors,
             throttle: ControllerCurve::default(),
             steer: ControllerCurve::default(),
-            odom: odom.clone(),
-            controller,
+            odom,
+            controller: Rc::new(RwLock::new(controller)),
             dist_travelled: Rc::new(RwLock::new(0.0)),
             motion_running: Rc::new(Mutex::new((false, false))),
             motion_start: Rc::new(Mutex::new(Instant::now()))
